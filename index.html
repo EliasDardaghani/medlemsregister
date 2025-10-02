@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Föreningens Medlemsregister</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="module">
+        import { createRoot } from 'https://esm.sh/react@18.2.0';
+        import { createElement as h, useState, useEffect } from 'https://esm.sh/react@18.2.0';
+        import * as LucideIcons from 'https://esm.sh/lucide-react@0.263.1';
+
+        const { Users, UserPlus, Calendar, TrendingUp, Trash2, Check, Download, Upload } = LucideIcons;
+
+        function MemberRegistry() {
+            const [members, setMembers] = useState([]);
+            const [meetings, setMeetings] = useState([]);
+            const [newMemberName, setNewMemberName] = useState('');
+            const [newMemberEmail, setNewMemberEmail] = useState('');
+            const [newMeetingName, setNewMeetingName] = useState('');
+            const [newMeetingDate, setNewMeetingDate] = useState('');
+            const [activeTab, setActiveTab] = useState('members');
+
+            useEffect(() => {
+                const savedMembers = localStorage.getItem('members');
+                const savedMeetings = localStorage.getItem('meetings');
+                
+                if (savedMembers) {
+                    setMembers(JSON.parse(savedMembers));
+                } else {
+                    setMembers([
+                        { id: 1, name: 'Anna Andersson', joinDate: '2024-01-15', email: 'anna@example.com' },
+                        { id: 2, name: 'Erik Eriksson', joinDate: '2024-02-20', email: 'erik@example.com' }
+                    ]);
+                }
+                
+                if (savedMeetings) {
+                    setMeetings(JSON.parse(savedMeetings));
+                } else {
+                    setMeetings([
+                        { id: 1, date: '2024-09-15', name: 'Årsmöte', attendance: [1, 2] }
+                    ]);
+                }
+            }, []);
+
+            useEffect(() => {
+                if (members.length > 0) {
+                    localStorage.setItem('members', JSON.stringify(members));
+                }
+            }, [members]);
+
+            useEffect(() => {
+                if (meetings.length > 0) {
+                    localStorage.setItem('meetings', JSON.stringify(meetings));
+                }
+            }, [meetings]);
+
+            const addMember = () => {
+                if (newMemberName.trim()) {
+                    const newMember = {
+                        id: Date.now(),
+                        name: newMemberName,
+                        email: newMemberEmail,
+                        joinDate: new Date().toISOString().split('T')[0]
+                    };
+                    setMembers([...members, newMember]);
+                    setNewMemberName('');
+                    setNewMemberEmail('');
+                }
+            };
+
+            const removeMember = (id) => {
+                setMembers(members.filter(m => m.id !== id));
+                setMeetings(meetings.map(meeting => ({
+                    ...meeting,
+                    attendance: meeting.attendance.filter(memberId => memberId !== id)
+                })));
+            };
+
+            const addMeeting = () => {
+                if (newMeetingName.trim() && newMeetingDate) {
+                    const newMeeting = {
+                        id: Date.now(),
+                        name: newMeetingName,
+                        date: newMeetingDate,
+                        attendance: []
+                    };
+                    setMeetings([...meetings, newMeeting]);
+                    setNewMeetingName('');
+                    setNewMeetingDate('');
+                }
+            };
+
+            const toggleAttendance = (meetingId, memberId) => {
+                setMeetings(meetings.map(meeting => {
+                    if (meeting.id === meetingId) {
+                        const attendance = meeting.attendance.includes(memberId)
+                            ? meeting.attendance.filter(id => id !== memberId)
+                            : [...meeting.attendance, memberId];
+                        return { ...meeting, attendance };
+                    }
+                    return meeting;
+                }));
+            };
+
+            const exportData = () => {
+                const data = {
+                    members,
+                    meetings,
+                    exportDate: new Date().toISOString()
+                };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `medlemsregister-${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+            };
+
+            const importData = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const data = JSON.parse(event.target.result);
+                            if (data.members) setMembers(data.members);
+                            if (data.meetings) setMeetings(data.meetings);
+                            alert('Data importerad!');
+                        } catch (error) {
+                            alert('Fel vid import av data');
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+
+            const calculateStats = () => {
+                const totalMembers = members.length;
+                const totalMeetings = meetings.length;
+                const avgAttendance = meetings.length > 0
+                    ? (meetings.reduce((sum, m) => sum + m.attendance.length, 0) / meetings.length).toFixed(1)
+                    : 0;
+                
+                const memberStats = members.map(member => {
+                    const attended = meetings.filter(m => m.attendance.includes(member.id)).length;
+                    const percentage = meetings.length > 0 ? ((attended / meetings.length) * 100).toFixed(0) : 0;
+                    return { ...member, attended, percentage };
+                });
+
+                return { totalMembers, totalMeetings, avgAttendance, memberStats };
+            };
+
+            const stats = calculateStats();
+
+            return h('div', { className: 'min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6' },
+                h('div', { className: 'max-w-6xl mx-auto' },
+                    h('div', { className: 'bg-white rounded-lg shadow-lg p-6 mb-6' },
+                        h('h1', { className: 'text-3xl font-bold text-indigo-900 mb-2 flex items-center gap-2' },
+                            h(Users, { className: 'w-8 h-8' }),
+                            'Föreningens Medlemsregister'
+                        ),
+                        h('p', { className: 'text-gray-600' }, 'Hantera medlemmar och registrera närvaro'),
+                        h('div', { className: 'mt-4 flex gap-2' },
+                            h('button', {
+                                onClick: exportData,
+                                className: 'bg-green-600 text-white px-4 py-2 rounded font-semibold hover:bg-green-700 transition-colors flex items-center gap-2'
+                            },
+                                h(Download, { className: 'w-4 h-4' }),
+                                'Exportera data'
+                            ),
+                            h('label', { className: 'bg-blue-600 text-white px-4 py-2 rounded font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2 cursor-pointer' },
+                                h(Upload, { className: 'w-4 h-4' }),
+                                'Importera data',
+                                h('input', { type: 'file', accept: '.json', onChange: importData, className: 'hidden' })
+                            )
+                        )
+                    ),
+                    h('div', { className: 'bg-white rounded-lg shadow-lg mb-6' },
+                        h('div', { className: 'flex border-b' },
+                            h('button', {
+                                onClick: () => setActiveTab('members'),
+                                className: `flex-1 py-4 px-6 font-semibold transition-colors ${activeTab === 'members' ? 'bg-indigo-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
+                            },
+                                h(Users, { className: 'w-5 h-5 inline mr-2' }),
+                                'Medlemmar'
+                            ),
+                            h('button', {
+                                onClick: () => setActiveTab('attendance'),
+                                className: `flex-1 py-4 px-6 font-semibold transition-colors ${activeTab === 'attendance' ? 'bg-indigo-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
+                            },
+                                h(Calendar, { className: 'w-5 h-5 inline mr-2' }),
+                                'Närvaro'
+                            ),
+                            h('button', {
+                                onClick: () => setActiveTab('stats'),
+                                className: `flex-1 py-4 px-6 font-semibold transition-colors ${activeTab === 'stats' ? 'bg-indigo-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
+                            },
+                                h(TrendingUp, { className: 'w-5 h-5 inline mr-2' }),
+                                'Statistik'
+                            )
+                        ),
+                        h('div', { className: 'p-6' },
+                            activeTab === 'members' && h('div', null,
+                                h('div', { className: 'mb-6 bg-indigo-50 p-4 rounded-lg' },
+                                    h('h3', { className: 'text-lg font-semibold mb-3 flex items-center gap-2' },
+                                        h(UserPlus, { className: 'w-5 h-5' }),
+                                        'Lägg till ny medlem'
+                                    ),
+                                    h('div', { className: 'grid grid-cols-1 md:grid-cols-3 gap-3' },
+                                        h('input', {
+                                            type: 'text',
+                                            placeholder: 'Namn',
+                                            value: newMemberName,
+                                            onChange: (e) => setNewMemberName(e.target.value),
+                                            onKeyPress: (e) => e.key === 'Enter' && addMember(),
+                                            className: 'px-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none'
+                                        }),
+                                        h('input', {
+                                            type: 'email',
+                                            placeholder: 'E-post (valfritt)',
+                                            value: newMemberEmail,
+                                            onChange: (e) => setNewMemberEmail(e.target.value),
+                                            onKeyPress: (e) => e.key === 'Enter' && addMember(),
+                                            className: 'px-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none'
+                                        }),
+                                        h('button', {
+                                            onClick: addMember,
+                                            className: 'bg-indigo-600 text-white px-6 py-2 rounded font-semibold hover:bg-indigo-700 transition-colors'
+                                        }, 'Lägg till')
+                                    )
+                                ),
+                                h('div', { className: 'space-y-2' },
+                                    h('h3', { className: 'text-lg font-semibold mb-3' }, `Medlemslista (${members.length})`),
+                                    members.length === 0
+                                        ? h('p', { className: 'text-gray-500 text-center py-8' }, 'Inga medlemmar ännu')
+                                        : members.map(member => h('div', {
+                                            key: member.id,
+                                            className: 'flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors'
+                                        },
+                                            h('div', null,
+                                                h('p', { className: 'font-semibold text-gray-900' }, member.name),
+                                                h('p', { className: 'text-sm text-gray-600' },
+                                                    `${member.email || 'Ingen e-post'} • Medlem sedan: ${member.joinDate}`
+                                                )
+                                            ),
+                                            h('button', {
+                                                onClick: () => removeMember(member.id),
+                                                className: 'text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded transition-colors',
+                                                title: 'Ta bort medlem'
+                                            }, h(Trash2, { className: 'w-5 h-5' }))
+                                        ))
+                                )
+                            ),
+                            activeTab === 'attendance' && h('div', null,
+                                h('div', { className: 'mb-6 bg-indigo-50 p-4 rounded-lg' },
+                                    h('h3', { className: 'text-lg font-semibold mb-3 flex items-center gap-2' },
+                                        h(Calendar, { className: 'w-5 h-5' }),
+                                        'Skapa nytt möte/aktivitet'
+                                    ),
+                                    h('div', { className: 'grid grid-cols-1 md:grid-cols-3 gap-3' },
+                                        h('input', {
+                                            type: 'text',
+                                            placeholder: 'Namn på möte/aktivitet',
+                                            value: newMeetingName,
+                                            onChange: (e) => setNewMeetingName(e.target.value),
+                                            className: 'px-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none'
+                                        }),
+                                        h('input', {
+                                            type: 'date',
+                                            value: newMeetingDate,
+                                            onChange: (e) => setNewMeetingDate(e.target.value),
+                                            className: 'px-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none'
+                                        }),
+                                        h('button', {
+                                            onClick: addMeeting,
+                                            className: 'bg-indigo-600 text-white px-6 py-2 rounded font-semibold hover:bg-indigo-700 transition-colors'
+                                        }, 'Skapa möte')
+                                    )
+                                ),
+                                h('div', { className: 'space-y-4' },
+                                    h('h3', { className: 'text-lg font-semibold mb-3' }, `Möten & Aktiviteter (${meetings.length})`),
+                                    meetings.length === 0
+                                        ? h('p', { className: 'text-gray-500 text-center py-8' }, 'Inga möten skapade ännu')
+                                        : meetings.map(meeting => h('div', {
+                                            key: meeting.id,
+                                            className: 'border border-gray-200 rounded-lg p-4'
+                                        },
+                                            h('div', { className: 'flex justify-between items-center mb-4' },
+                                                h('div', null,
+                                                    h('h4', { className: 'font-bold text-lg text-gray-900' }, meeting.name),
+                                                    h('p', { className: 'text-sm text-gray-600' },
+                                                        `${meeting.date} • ${meeting.attendance.length} närvarande`
+                                                    )
+                                                )
+                                            ),
+                                            h('div', { className: 'space-y-2' },
+                                                members.length === 0
+                                                    ? h('p', { className: 'text-gray-500 text-sm' }, 'Lägg till medlemmar först')
+                                                    : members.map(member => {
+                                                        const isPresent = meeting.attendance.includes(member.id);
+                                                        return h('button', {
+                                                            key: member.id,
+                                                            onClick: () => toggleAttendance(meeting.id, member.id),
+                                                            className: `w-full flex items-center justify-between p-3 rounded-lg transition-all ${isPresent ? 'bg-green-100 border-2 border-green-500' : 'bg-gray-50 border-2 border-gray-200 hover:bg-gray-100'}`
+                                                        },
+                                                            h('span', {
+                                                                className: `font-medium ${isPresent ? 'text-green-900' : 'text-gray-700'}`
+                                                            }, member.name),
+                                                            isPresent && h(Check, { className: 'w-5 h-5 text-green-600' })
+                                                        );
+                                                    })
+                                            )
+                                        ))
+                                )
+                            ),
+                            activeTab === 'stats' && h('div', null,
+                                h('div', { className: 'grid grid-cols-1 md:grid-cols-3 gap-4 mb-6' },
+                                    h('div', { className: 'bg-indigo-100 p-6 rounded-lg text-center' },
+                                        h('p', { className: 'text-3xl font-bold text-indigo-900' }, stats.totalMembers),
+                                        h('p', { className: 'text-indigo-700 font-semibold' }, 'Totalt medlemmar')
+                                    ),
+                                    h('div', { className: 'bg-blue-100 p-6 rounded-lg text-center' },
+                                        h('p', { className: 'text-3xl font-bold text-blue-900' }, stats.totalMeetings),
+                                        h('p', { className: 'text-blue-700 font-semibold' }, 'Totalt möten')
+                                    ),
+                                    h('div', { className: 'bg-green-100 p-6 rounded-lg text-center' },
+                                        h('p', { className: 'text-3xl font-bold text-green-900' }, stats.avgAttendance),
+                                        h('p', { className: 'text-green-700 font-semibold' }, 'Snitt närvaro/möte')
+                                    )
+                                ),
+                                h('div', null,
+                                    h('h3', { className: 'text-lg font-semibold mb-3' }, 'Närvarostatistik per medlem'),
+                                    members.length === 0
+                                        ? h('p', { className: 'text-gray-500 text-center py-8' }, 'Inga medlemmar att visa statistik för')
+                                        : h('div', { className: 'space-y-2' },
+                                            stats.memberStats.map(member => h('div', {
+                                                key: member.id,
+                                                className: 'bg-gray-50 p-4 rounded-lg'
+                                            },
+                                                h('div', { className: 'flex justify-between items-center mb-2' },
+                                                    h('span', { className: 'font-semibold text-gray-900' }, member.name),
+                                                    h('span', { className: 'text-sm text-gray-600' },
+                                                        `${member.attended} av ${stats.totalMeetings} möten (${member.percentage}%)`
+                                                    )
+                                                ),
+                                                h('div', { className: 'w-full bg-gray-200 rounded-full h-3' },
+                                                    h('div', {
+                                                        className: 'bg-indigo-600 h-3 rounded-full transition-all',
+                                                        style: { width: `${member.percentage}%` }
+                                                    })
+                                                )
+                                            ))
+                                        )
+                                )
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(h(MemberRegistry));
+    </script>
+</body>
+</html>
